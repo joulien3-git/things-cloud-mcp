@@ -1,0 +1,28 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Builds the existing Dockerfile and mounts a persistent disk at /data for
+# OAuth state (oauth.db) and generated keys. Persistent disks require a paid
+# instance type; on the free plan, /data is wiped on every deploy or restart.
+services:
+  - type: web
+    name: things-cloud-mcp
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CREDENTIALS_SECRET
+        generateValue: true
+      - key: PROXY_URLS
+        sync: false
