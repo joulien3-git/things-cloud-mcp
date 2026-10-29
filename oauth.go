@@ -404,7 +404,13 @@ func randomString(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// getBaseURL returns the public origin used in OAuth metadata. PUBLIC_URL
+// overrides request-derived values for hosts whose proxies report the internal
+// scheme (e.g. Back4App sends X-Forwarded-Proto: http behind HTTPS).
 func getBaseURL(r *http.Request) string {
+	if publicURL := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/"); publicURL != "" {
+		return publicURL
+	}
 	scheme := r.Header.Get("X-Forwarded-Proto")
 	if scheme == "" {
 		host := r.Host
