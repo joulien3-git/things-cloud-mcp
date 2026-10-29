@@ -1,3 +1,15 @@
+---
+title: Things Cloud MCP
+emoji: ✅
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 8080
+pinned: false
+license: mit
+short_description: MCP server for Things 3 via Things Cloud
+---
+
 # Things Cloud MCP
 
 An MCP server that connects AI assistants to Things 3 via Things Cloud.
