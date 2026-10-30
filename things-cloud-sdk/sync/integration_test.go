@@ -265,3 +265,23 @@ func TestStateQueries(t *testing.T) {
 		}
 	})
 }
+
+func TestLegacyItemsWithEmptyPayload(t *testing.T) {
+	t.Parallel()
+	syncer, err := Open(filepath.Join(t.TempDir(), "test.db"), nil)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer syncer.Close()
+
+	changes, err := syncer.processItems([]things.Item{
+		{UUID: "legacy-empty-task", Kind: things.ItemKindTask2, Action: things.ItemActionCreated},
+		{UUID: "legacy-empty-tag", Kind: things.ItemKindTag2, Action: things.ItemActionModified, P: json.RawMessage(`null`)},
+	}, 0)
+	if err != nil {
+		t.Fatalf("process empty legacy items: %v", err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("empty legacy items produced changes: %#v", changes)
+	}
+}

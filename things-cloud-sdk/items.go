@@ -1,6 +1,7 @@
 package thingscloud
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,13 @@ type Item struct {
 	P      json.RawMessage `json:"p"`
 	Kind   ItemKind        `json:"e"`
 	Action ItemAction      `json:"t"`
+}
+
+// HasEmptyPayload reports whether the item carries no payload at all, as some
+// legacy history records (e.g. Task2, Tag2) do.
+func (i Item) HasEmptyPayload() bool {
+	p := bytes.TrimSpace(i.P)
+	return len(p) == 0 || bytes.Equal(p, []byte("null"))
 }
 
 type itemsResponse struct {

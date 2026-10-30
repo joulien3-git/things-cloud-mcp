@@ -46,6 +46,13 @@ func isLegacyItemKind(kind things.ItemKind) bool {
 	}
 }
 
+// skipEmptyLegacyItem reports whether a legacy record without a payload should
+// be ignored. Deletions still apply; creations and modifications carry no
+// data, so applying them would only add blank, untitled items.
+func skipEmptyLegacyItem(item things.Item) bool {
+	return isLegacyItemKind(item.Kind) && item.HasEmptyPayload() && item.Action != things.ItemActionDeleted
+}
+
 func encodeLegacyIDs(ids []string) {
 	for i := range ids {
 		if things.ValidateUUID(ids[i]) == nil {
@@ -317,6 +324,11 @@ func (s *State) Update(items ...things.Item) error {
 		default:
 			return fmt.Errorf("item %s has unsupported kind %q", rawItem.UUID, rawItem.Kind)
 		}
+		if isLegacyItemKind(rawItem.Kind) && rawItem.HasEmptyPayload() {
+			// Old histories contain legacy records without a payload; see
+			// skipEmptyLegacyItem for how they are applied.
+			continue
+		}
 		if err := json.Unmarshal(rawItem.P, target); err != nil {
 			return fmt.Errorf("decode item %s (%s): %w", rawItem.UUID, rawItem.Kind, err)
 		}
@@ -327,6 +339,9 @@ func (s *State) Update(items ...things.Item) error {
 			continue
 		}
 		legacy := isLegacyItemKind(rawItem.Kind)
+		if skipEmptyLegacyItem(rawItem) {
+			continue
+		}
 		if legacy && things.ValidateUUID(rawItem.UUID) != nil {
 			rawItem.UUID = things.EncodeLegacyIdentifier(rawItem.UUID)
 		}

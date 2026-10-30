@@ -187,3 +187,53 @@ func assertIDs(t *testing.T, field string, got []string, want ...string) {
 		}
 	}
 }
+
+func TestStateLegacyItemsWithEmptyPayload(t *testing.T) {
+	t.Parallel()
+	const taskID = "13AED47B-1D02-4B11-8475-D54EB69DE64A"
+	const tagID = "CC-Things-Tag-Low"
+	taskKey := things.EncodeLegacyIdentifier(taskID)
+	tagKey := things.EncodeLegacyIdentifier(tagID)
+
+	for _, payload := range []json.RawMessage{nil, json.RawMessage(``), json.RawMessage(`null`), json.RawMessage(" \n")} {
+		state := NewState()
+		title := "Kept"
+		if err := state.Update(
+			things.Item{UUID: taskID, Kind: things.ItemKindTask2, Action: things.ItemActionCreated, P: legacyPayload(t, things.TaskActionItemPayload{Title: &title})},
+			things.Item{UUID: tagID, Kind: things.ItemKindTag2, Action: things.ItemActionCreated, P: json.RawMessage(`{"tt":"Low"}`)},
+			// Empty modifications must neither fail the batch nor alter the items.
+			things.Item{UUID: taskID, Kind: things.ItemKindTask2, Action: things.ItemActionModified, P: payload},
+			things.Item{UUID: tagID, Kind: things.ItemKindTag2, Action: things.ItemActionModified, P: payload},
+			// Empty creations must not add blank items.
+			things.Item{UUID: "AAAAAAAA-2222-3333-4444-BBBBBBBBBBBB", Kind: things.ItemKindTask2, Action: things.ItemActionCreated, P: payload},
+			things.Item{UUID: "CC-Things-Tag-Empty", Kind: things.ItemKindTag2, Action: things.ItemActionCreated, P: payload},
+		); err != nil {
+			t.Fatalf("payload %q: %v", payload, err)
+		}
+		if len(state.Tasks) != 1 || state.Tasks[taskKey] == nil || state.Tasks[taskKey].Title != "Kept" {
+			t.Errorf("payload %q: tasks = %#v, want only %q titled Kept", payload, state.Tasks, taskKey)
+		}
+		if len(state.Tags) != 1 || state.Tags[tagKey] == nil || state.Tags[tagKey].Title != "Low" {
+			t.Errorf("payload %q: tags = %#v, want only %q titled Low", payload, state.Tags, tagKey)
+		}
+
+		// Deletions without a payload still apply.
+		if err := state.Update(
+			things.Item{UUID: taskID, Kind: things.ItemKindTask2, Action: things.ItemActionDeleted, P: payload},
+			things.Item{UUID: tagID, Kind: things.ItemKindTag2, Action: things.ItemActionDeleted, P: payload},
+		); err != nil {
+			t.Fatalf("payload %q: delete: %v", payload, err)
+		}
+		if len(state.Tasks) != 0 || len(state.Tags) != 0 {
+			t.Errorf("payload %q: empty deletions not applied: tasks=%d tags=%d", payload, len(state.Tasks), len(state.Tags))
+		}
+	}
+}
+
+func TestStateCurrentKindWithEmptyPayloadStillFails(t *testing.T) {
+	t.Parallel()
+	err := NewState().Update(things.Item{UUID: "AAAAAAAAAAAAAAAAAAAAAA", Kind: things.ItemKindTask, Action: things.ItemActionCreated})
+	if err == nil {
+		t.Fatal("Task6 with an empty payload was accepted; current kinds must fail closed")
+	}
+}
