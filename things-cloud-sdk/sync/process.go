@@ -64,13 +64,17 @@ func (s *Syncer) processItem(item things.Item, serverIndex int, ts time.Time) ([
 		// Versioned settings are account metadata, not task-graph entities.
 		return nil, nil
 	}
+	if things.IsCommandKind(item.Kind) {
+		// Mail to Things queue entries; the resulting task syncs separately.
+		return nil, nil
+	}
 	if (item.Kind == things.ItemKindTask2 || item.Kind == things.ItemKindTag2) &&
 		item.Action != things.ItemActionDeleted && item.HasEmptyPayload() {
 		// Legacy records without a payload carry nothing to apply.
 		return nil, nil
 	}
 	switch item.Kind {
-	case things.ItemKindTask, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
+	case things.ItemKindTask, things.ItemKindTask7, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
 		return s.processTaskItem(item, serverIndex, ts)
 	case things.ItemKindArea, things.ItemKindArea3, things.ItemKindAreaPlain:
 		return s.processAreaItem(item, serverIndex, ts)

@@ -303,7 +303,7 @@ func (s *State) Update(items ...things.Item) error {
 	// skipping a future or malformed event would make the local state permanently
 	// incomplete, so updates are all-or-nothing with respect to decoding.
 	for _, rawItem := range items {
-		if things.IsSettingsKind(rawItem.Kind) {
+		if things.IsSettingsKind(rawItem.Kind) || things.IsCommandKind(rawItem.Kind) {
 			continue
 		}
 		if rawItem.Action != things.ItemActionCreated && rawItem.Action != things.ItemActionModified && rawItem.Action != things.ItemActionDeleted {
@@ -311,7 +311,7 @@ func (s *State) Update(items ...things.Item) error {
 		}
 		var target any
 		switch rawItem.Kind {
-		case things.ItemKindTask, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
+		case things.ItemKindTask, things.ItemKindTask7, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
 			target = &things.TaskActionItemPayload{}
 		case things.ItemKindChecklistItem, things.ItemKindChecklistItem2, things.ItemKindChecklistItem3:
 			target = &things.CheckListActionItemPayload{}
@@ -335,7 +335,7 @@ func (s *State) Update(items ...things.Item) error {
 	}
 
 	for _, rawItem := range items {
-		if things.IsSettingsKind(rawItem.Kind) {
+		if things.IsSettingsKind(rawItem.Kind) || things.IsCommandKind(rawItem.Kind) {
 			continue
 		}
 		legacy := isLegacyItemKind(rawItem.Kind)
@@ -346,7 +346,7 @@ func (s *State) Update(items ...things.Item) error {
 			rawItem.UUID = things.EncodeLegacyIdentifier(rawItem.UUID)
 		}
 		switch rawItem.Kind {
-		case things.ItemKindTask, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
+		case things.ItemKindTask, things.ItemKindTask7, things.ItemKindTask4, things.ItemKindTask3, things.ItemKindTask2, things.ItemKindTaskPlain:
 			item := things.TaskActionItem{Item: rawItem}
 			_ = json.Unmarshal(rawItem.P, &item.P)
 			if legacy {

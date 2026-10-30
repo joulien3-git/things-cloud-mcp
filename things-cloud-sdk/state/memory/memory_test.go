@@ -497,14 +497,16 @@ func TestStateUpdateRejectsMalformedKnownItem(t *testing.T) {
 
 func TestStateUpdateRejectsUnknownKind(t *testing.T) {
 	s := NewState()
-	err := s.Update(things.Item{
-		UUID:   "future-item",
-		Kind:   things.ItemKind("Task7"),
-		Action: things.ItemActionCreated,
-		P:      []byte(`{}`),
-	})
-	if err == nil {
-		t.Fatal("expected unknown kind error")
+	for _, kind := range []things.ItemKind{"Task8", "Task999"} {
+		err := s.Update(things.Item{
+			UUID:   "future-item",
+			Kind:   kind,
+			Action: things.ItemActionCreated,
+			P:      []byte(`{}`),
+		})
+		if err == nil {
+			t.Fatalf("expected unknown kind error for %q", kind)
+		}
 	}
 }
 
@@ -523,5 +525,29 @@ func TestStateUpdateIgnoresVersionedSettings(t *testing.T) {
 	}
 	if len(s.Tasks) != 0 || len(s.Areas) != 0 || len(s.Tags) != 0 || len(s.CheckListItems) != 0 {
 		t.Fatalf("settings changed task graph: %#v", s)
+	}
+}
+
+func TestStateUpdateIgnoresMailQueueCommands(t *testing.T) {
+	s := NewState()
+	items := []things.Item{
+		{UUID: "8F63FEC2-1202-43D8-80D7-55B4AC4FCA37", Kind: things.ItemKindCommand, Action: things.ItemActionCreated,
+			P: []byte(`{"cd":1785223359,"tp":0,"if":{"id":"E9EBA235-0000-0000-0000-000000000000","tt":"Fwd: hello","nt":"<note>body</note>"}}`)},
+		{UUID: "8F63FEC2-1202-43D8-80D7-55B4AC4FCA37", Kind: things.ItemKindCommand, Action: things.ItemActionDeleted, P: []byte(`{}`)},
+		{UUID: "457jbco4TLEAXyjgnrgE6X", Kind: things.ItemKindCommand3, Action: things.ItemActionDeleted, P: []byte(`{}`)},
+	}
+	if err := s.Update(items...); err != nil {
+		t.Fatalf("mail queue command blocked state update: %v", err)
+	}
+	if len(s.Tasks) != 0 || len(s.Areas) != 0 || len(s.Tags) != 0 || len(s.CheckListItems) != 0 {
+		t.Fatalf("mail queue command changed task graph: %#v", s)
+	}
+}
+
+func TestStateUpdateRejectsUnknownCommandVersion(t *testing.T) {
+	s := NewState()
+	err := s.Update(things.Item{UUID: "future-command", Kind: things.ItemKind("Command4"), Action: things.ItemActionCreated, P: []byte(`{}`)})
+	if err == nil {
+		t.Fatal("expected unknown kind error for Command4")
 	}
 }

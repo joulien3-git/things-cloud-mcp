@@ -60,6 +60,9 @@ var (
 	ItemKindChecklistItem3 ItemKind = "ChecklistItem3"
 	// ItemKindTask identifies a Task or Subtask
 	ItemKindTask      ItemKind = "Task6"
+	// ItemKindTask7 is a newer task kind emitted alongside Task6 by recent
+	// Things clients. Its payload decodes with the same task payload schema.
+	ItemKindTask7     ItemKind = "Task7"
 	ItemKindTask4     ItemKind = "Task4"
 	ItemKindTask3     ItemKind = "Task3"
 	ItemKindTask2     ItemKind = "Task2"
@@ -79,6 +82,13 @@ var (
 	ItemKindTombstone      ItemKind = "Tombstone2"
 	// ItemKindTombstonePlain is the legacy deletion-record kind found in older histories.
 	ItemKindTombstonePlain ItemKind = "Tombstone"
+	// ItemKindCommand is a Mail to Things queue entry: a forwarded email waiting
+	// for a Things client to turn it into an ordinary task. It uses legacy
+	// UUID-style identifiers and its payload carries the full email body.
+	ItemKindCommand ItemKind = "Command"
+	// ItemKindCommand3 is the current-generation queue entry kind. In observed
+	// histories it only appears as the deletion of a processed entry.
+	ItemKindCommand3 ItemKind = "Command3"
 )
 
 // IsSettingsKind reports whether kind is a versioned Things settings record.
@@ -97,6 +107,26 @@ func IsSettingsKind(kind ItemKind) bool {
 		}
 	}
 	return true
+}
+
+// IsCommandKind reports whether kind is a Mail to Things queue entry. The task
+// a client creates from an entry is synced as an ordinary Task item, and the
+// entry is then deleted, so queue entries carry no task-graph state. Unlike
+// IsSettingsKind this matches exact versions only: a future Command kind may
+// carry state, so it stays fail-closed until verified.
+func IsCommandKind(kind ItemKind) bool {
+	return kind == ItemKindCommand || kind == ItemKindCommand3
+}
+
+// IsTaskKind reports whether kind is a known task kind whose payload decodes as
+// TaskActionItemPayload. Unknown future versions (Task8+) are not matched, so
+// they stay fail-closed until verified.
+func IsTaskKind(kind ItemKind) bool {
+	switch kind {
+	case ItemKindTask, ItemKindTask7, ItemKindTask4, ItemKindTask3, ItemKindTask2, ItemKindTaskPlain:
+		return true
+	}
+	return false
 }
 
 // Timestamp allows unix epochs represented as float or ints to be unmarshalled
