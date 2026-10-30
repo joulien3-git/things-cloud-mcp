@@ -3,7 +3,7 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
-	// "fmt"
+	"log"
 	"sort"
 
 	things "github.com/arthursoares/things-cloud-sdk"
@@ -18,6 +18,10 @@ type State struct {
 	Tasks          map[string]*things.Task
 	Tags           map[string]*things.Tag
 	CheckListItems map[string]*things.CheckListItem
+
+	// warnedKinds records unknown kinds already logged, so a history with many
+	// items of the same unknown kind produces a single warning.
+	warnedKinds map[things.ItemKind]bool
 }
 
 // NewState creates a new, empty state
@@ -44,6 +48,19 @@ func isLegacyItemKind(kind things.ItemKind) bool {
 	default:
 		return false
 	}
+}
+
+// warnUnknownKind logs the first item of each unsupported kind. The apply loop
+// has no case for such kinds, so they are ignored there.
+func (s *State) warnUnknownKind(item things.Item) {
+	if s.warnedKinds == nil {
+		s.warnedKinds = map[things.ItemKind]bool{}
+	}
+	if s.warnedKinds[item.Kind] {
+		return
+	}
+	s.warnedKinds[item.Kind] = true
+	log.Printf("things-cloud-sdk: ignoring items of unsupported kind %q (first: %s)", item.Kind, item.UUID)
 }
 
 // skipEmptyLegacyItem reports whether a legacy record without a payload should
@@ -299,9 +316,10 @@ func (s *State) updateTag(item things.TagActionItem) *things.Tag {
 
 // Update applies all items to update the aggregated state
 func (s *State) Update(items ...things.Item) error {
-	// Validate the whole batch first. Advancing a sync cursor after silently
-	// skipping a future or malformed event would make the local state permanently
-	// incomplete, so updates are all-or-nothing with respect to decoding.
+	// Validate the whole batch first, so a malformed event of a known kind fails
+	// the update instead of leaving the local state permanently incomplete.
+	// Unknown kinds are skipped with a warning rather than blocking every read:
+	// the items they describe are missing from the state until supported.
 	for _, rawItem := range items {
 		if things.IsSettingsKind(rawItem.Kind) || things.IsCommandKind(rawItem.Kind) {
 			continue
@@ -322,7 +340,8 @@ func (s *State) Update(items ...things.Item) error {
 		case things.ItemKindTombstone, things.ItemKindTombstonePlain:
 			target = &things.TombstoneActionItemPayload{}
 		default:
-			return fmt.Errorf("item %s has unsupported kind %q", rawItem.UUID, rawItem.Kind)
+			s.warnUnknownKind(rawItem)
+			continue
 		}
 		if isLegacyItemKind(rawItem.Kind) && rawItem.HasEmptyPayload() {
 			// Old histories contain legacy records without a payload; see

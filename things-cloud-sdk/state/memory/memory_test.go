@@ -1,7 +1,10 @@
 package memory
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
+	"strings"
 	"testing"
 
 	things "github.com/arthursoares/things-cloud-sdk"
@@ -495,21 +498,6 @@ func TestStateUpdateRejectsMalformedKnownItem(t *testing.T) {
 	}
 }
 
-func TestStateUpdateRejectsUnknownKind(t *testing.T) {
-	s := NewState()
-	for _, kind := range []things.ItemKind{"Task8", "Task999"} {
-		err := s.Update(things.Item{
-			UUID:   "future-item",
-			Kind:   kind,
-			Action: things.ItemActionCreated,
-			P:      []byte(`{}`),
-		})
-		if err == nil {
-			t.Fatalf("expected unknown kind error for %q", kind)
-		}
-	}
-}
-
 func TestStateUpdateIgnoresVersionedSettings(t *testing.T) {
 	s := NewState()
 	for _, kind := range []things.ItemKind{things.ItemKindSettings, "Settings5", "Settings42"} {
@@ -544,10 +532,42 @@ func TestStateUpdateIgnoresMailQueueCommands(t *testing.T) {
 	}
 }
 
-func TestStateUpdateRejectsUnknownCommandVersion(t *testing.T) {
+// TestStateUpdateIgnoresUnknownKinds checks that unsupported kinds (future
+// versions such as Task8 or Command4) are skipped with one warning per kind
+// instead of blocking the rebuild, while known items in the batch still apply.
+// It swaps the global logger, so it must not run in parallel.
+func TestStateUpdateIgnoresUnknownKinds(t *testing.T) {
+	var logs bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(prev)
+
 	s := NewState()
-	err := s.Update(things.Item{UUID: "future-command", Kind: things.ItemKind("Command4"), Action: things.ItemActionCreated, P: []byte(`{}`)})
-	if err == nil {
-		t.Fatal("expected unknown kind error for Command4")
+	err := s.Update(
+		things.Item{UUID: "future-1", Kind: "Task8", Action: things.ItemActionCreated, P: []byte(`{"tt":"Future"}`)},
+		things.Item{UUID: "future-2", Kind: "Task8", Action: things.ItemActionModified, P: []byte(`not json`)},
+		things.Item{UUID: "future-3", Kind: "Command4", Action: things.ItemActionCreated},
+		things.Item{UUID: "known-task", Kind: things.ItemKindTask, Action: things.ItemActionCreated, P: []byte(`{"tt":"Known"}`)},
+	)
+	if err != nil {
+		t.Fatalf("unknown kinds blocked state update: %v", err)
+	}
+	if len(s.Tasks) != 1 || s.Tasks["known-task"] == nil || s.Tasks["known-task"].Title != "Known" {
+		t.Fatalf("tasks = %#v, want only known-task", s.Tasks)
+	}
+
+	// A second batch with the same unknown kind does not warn again.
+	if err := s.Update(things.Item{UUID: "future-4", Kind: "Task8", Action: things.ItemActionCreated, P: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	out := logs.String()
+	if got := strings.Count(out, `unsupported kind "Task8"`); got != 1 {
+		t.Errorf("Task8 warnings = %d, want 1; logs:\n%s", got, out)
+	}
+	if got := strings.Count(out, `unsupported kind "Command4"`); got != 1 {
+		t.Errorf("Command4 warnings = %d, want 1; logs:\n%s", got, out)
+	}
+	if !strings.Contains(out, "future-1") {
+		t.Errorf("warning does not name the first item; logs:\n%s", out)
 	}
 }
